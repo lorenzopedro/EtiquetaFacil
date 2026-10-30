@@ -1,0 +1,10 @@
+{
+  "name": "EtiquetaFacil - Gerador de Etiquetas A4",
+  "description": "App para agilizar etiquetagem de caixas com leitura de fotos por IA (etiquetas de fábrica ou manuscritas), preenchimento assistido de dados faltantes, impressão em folha A4 paisagem na fonte Consolas, exportação em PDF e CSV e suporte offline.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

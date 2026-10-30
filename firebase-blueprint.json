@@ -1,0 +1,71 @@
+{
+  "entities": {
+    "Label": {
+      "title": "Label",
+      "description": "Etiqueta de caixa de produto com código, descrição, quantidade e validade",
+      "type": "object",
+      "properties": {
+        "codigo": {
+          "type": "string",
+          "description": "Código do produto / SKU",
+          "maxLength": 64
+        },
+        "descricao": {
+          "type": "string",
+          "description": "Descrição detalhada do produto",
+          "maxLength": 256
+        },
+        "quantidade": {
+          "type": "string",
+          "description": "Quantidade contida na caixa",
+          "maxLength": 32
+        },
+        "validade": {
+          "type": "string",
+          "description": "Data de validade do produto",
+          "maxLength": 32
+        },
+        "tipoOrigem": {
+          "type": "string",
+          "description": "Origem da etiqueta (fabrica ou manuscrita)",
+          "enum": ["fabrica", "manuscrita"]
+        },
+        "observacoes": {
+          "type": "string",
+          "description": "Observações adicionais ou notas de conferência",
+          "maxLength": 500
+        },
+        "copias": {
+          "type": "number",
+          "description": "Número de cópias para impressão"
+        },
+        "needsManualReview": {
+          "type": "boolean",
+          "description": "Indica se precisa de revisão manual"
+        },
+        "missingFields": {
+          "type": "array",
+          "description": "Lista de campos pendentes de preenchimento"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Identificador do usuário que criou a etiqueta",
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp de criação no servidor"
+        }
+      },
+      "required": ["codigo", "descricao", "quantidade", "validade"]
+    }
+  },
+  "firestore": {
+    "/labels/{labelId}": {
+      "schema": {
+        "$ref": "#/entities/Label"
+      },
+      "description": "Coleção de etiquetas de caixas registradas no sistema"
+    }
+  }
+}

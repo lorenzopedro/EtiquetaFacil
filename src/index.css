@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+@layer utilities {
+  .font-consolas {
+    font-family: Consolas, 'Courier New', 'Lucida Console', Monaco, monospace;
+    font-feature-settings: "tnum" 1;
+  }
+}
+
+/* Remover barra de rolagem mantendo a rolagem por toque e mouse funcional */
+html,
+body {
+  overflow-x: hidden;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE e Edge */
+}
+
+/* Ocultar barra de rolagem em todos os navegadores WebKit/Blink */
+::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+* {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
