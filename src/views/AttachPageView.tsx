@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
   Camera,
   Upload,
@@ -7,7 +7,25 @@ import {
   Info,
   CheckCircle2,
   AlertTriangle,
+  Activity,
+  RefreshCw,
+  ExternalLink,
 } from 'lucide-react';
+
+interface ModelQuotaItem {
+  model: string;
+  status: 'available' | 'exhausted' | 'unknown';
+  retryAfterText?: string;
+  lastError?: string;
+}
+
+interface QuotaStatusResponse {
+  hasApiKey: boolean;
+  availableCount: number;
+  totalModels: number;
+  models: ModelQuotaItem[];
+  dashboardUrl: string;
+}
 
 interface AttachPageViewProps {
   onOpenCamera: () => void;
@@ -21,27 +39,44 @@ export const AttachPageView: React.FC<AttachPageViewProps> = ({
   onOpenCamera,
   onSelectFile,
   onOpenManual,
-  isAnalyzing,
-  analyzingStatus,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [quotaData, setQuotaData] = useState<QuotaStatusResponse | null>(null);
+  const [isCheckingQuota, setIsCheckingQuota] = useState(false);
+
+  const fetchQuotaStatus = async () => {
+    try {
+      const res = await fetch('/api/quota-status');
+      if (res.ok) {
+        const data = await res.json();
+        setQuotaData(data);
+      }
+    } catch {
+      // Ignore network errors when offline
+    }
+  };
+
+  const runLiveQuotaCheck = async () => {
+    setIsCheckingQuota(true);
+    try {
+      const res = await fetch('/api/quota-status/check', { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        setQuotaData(data);
+      }
+    } catch {
+      // Ignore offline errors
+    } finally {
+      setIsCheckingQuota(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchQuotaStatus();
+  }, []);
 
   return (
     <div className="flex flex-col gap-5 max-w-2xl mx-auto w-full animate-fade-in">
-      {/* Title & Banner */}
-      <div className="rounded-3xl bg-radial from-[#00325f] to-[#011e38] border-2 border-[#00325f] p-5 sm:p-6 shadow-xl space-y-2 text-center sm:text-left">
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#011e38] text-[#38bdf8] text-xs font-mono font-semibold border border-[#38bdf8]/30">
-          <Sparkles className="w-3.5 h-3.5" />
-          Reconhecimento OCR • Fábrica & Manuscrito
-        </span>
-        <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-          Anexar Fotos para Gerar Etiquetas
-        </h2>
-        <p className="text-xs sm:text-sm text-[#e6f0ff]/80">
-          Tire uma foto ou selecione imagens de caixas. O sistema lê Código, Descrição, Quantidade e Validade. Se algo faltar na foto, você poderá preencher manualmente.
-        </p>
-      </div>
-
       {/* Main Action Buttons */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
         {/* Card 1: Live Camera */}
@@ -105,27 +140,97 @@ export const AttachPageView: React.FC<AttachPageViewProps> = ({
         onChange={onSelectFile}
       />
 
+      {/* AI Credits & Quota Status Panel */}
+      <div className="rounded-2xl bg-[#002242] border border-[#00325f] p-4 space-y-3 shadow-lg">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#00325f] pb-3">
+          <div className="flex items-center gap-2">
+            <Activity className="w-4 h-4 text-[#38bdf8]" />
+            <h4 className="font-bold text-white text-xs sm:text-sm">
+              Status de Créditos / Cota Gratuita de IA
+            </h4>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={runLiveQuotaCheck}
+              disabled={isCheckingQuota}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#00325f] hover:bg-[#02437e] text-white text-xs font-semibold border border-[#38bdf8]/40 transition active:scale-95 disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-[#38bdf8] ${isCheckingQuota ? 'animate-spin' : ''}`} />
+              <span>{isCheckingQuota ? 'Testando modelos...' : 'Verificar Créditos Agora'}</span>
+            </button>
+            <a
+              href="https://ai.dev/rate-limit"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-[#011e38] hover:bg-[#00325f] text-[#38bdf8] text-xs font-mono border border-[#00325f] transition"
+              title="Abrir painel oficial de limites do Google AI"
+            >
+              <span>Painel Google</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
+        </div>
+
+        <p className="text-[11px] text-[#e6f0ff]/80 leading-relaxed">
+          No plano gratuito do Google Gemini, cada modelo possui uma cota independente de <strong>20 análises por dia</strong>. Quando um modelo atinge o limite diário (Erro 429), o sistema troca automaticamente para os outros modelos disponíveis abaixo:
+        </p>
+
+        {quotaData && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+            {quotaData.models.map((m) => {
+              const isAvailable = m.status === 'available';
+              return (
+                <div
+                  key={m.model}
+                  className={`flex items-center justify-between px-3 py-2 rounded-xl border text-xs ${
+                    isAvailable
+                      ? 'bg-emerald-950/30 border-emerald-500/30 text-emerald-200'
+                      : 'bg-amber-950/30 border-amber-500/30 text-amber-200'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 truncate">
+                    {isAvailable ? (
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    ) : (
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    )}
+                    <span className="font-mono text-[11px] font-bold truncate">{m.model}</span>
+                  </div>
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-black/30 shrink-0 ml-2">
+                    {isAvailable
+                      ? 'Disponível'
+                      : m.retryAfterText
+                      ? `Esgotado (renova em ${m.retryAfterText})`
+                      : 'Cota 20/dia atingida'}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       {/* Checklist / Requirement Tips */}
       <div className="rounded-2xl bg-[#00325f]/40 border border-[#00325f] p-4 text-xs space-y-2 text-[#e6f0ff]/90">
         <h4 className="font-bold text-white flex items-center gap-1.5 text-xs">
           <Info className="w-4 h-4 text-[#38bdf8]" />
           Informações Reconhecidas na Foto:
         </h4>
-        <div className="grid grid-cols-2 gap-2 pt-1 font-mono text-[11px]">
-          <div className="flex items-center gap-1.5 bg-[#011e38] p-2 rounded-xl border border-[#00325f]">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+          <div className="bg-[#011e38]/70 p-2.5 rounded-xl border border-[#00325f] flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
             <span>Código do Produto</span>
           </div>
-          <div className="flex items-center gap-1.5 bg-[#011e38] p-2 rounded-xl border border-[#00325f]">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+          <div className="bg-[#011e38]/70 p-2.5 rounded-xl border border-[#00325f] flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
             <span>Descrição do Produto</span>
           </div>
-          <div className="flex items-center gap-1.5 bg-[#011e38] p-2 rounded-xl border border-[#00325f]">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+          <div className="bg-[#011e38]/70 p-2.5 rounded-xl border border-[#00325f] flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
             <span>Quantidade (QTD)</span>
           </div>
-          <div className="flex items-center gap-1.5 bg-[#011e38] p-2 rounded-xl border border-[#00325f]">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+          <div className="bg-[#011e38]/70 p-2.5 rounded-xl border border-[#00325f] flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
             <span>Data de Validade (VAL)</span>
           </div>
         </div>

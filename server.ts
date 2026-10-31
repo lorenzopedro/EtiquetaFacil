@@ -26,12 +26,125 @@ const ai = new GoogleGenAI({
   },
 });
 
+// Pool of Vision-capable Gemini models (each has its own separate Free Tier daily quota)
+const VISION_MODELS = [
+  'gemini-3.1-flash-lite',
+  'gemini-3.5-flash-lite',
+  'gemini-3-flash-preview',
+  'gemini-3.8-flash',
+  'gemini-2.5-flash',
+];
+
+interface ModelQuotaState {
+  model: string;
+  status: 'available' | 'exhausted' | 'unknown';
+  exhaustedUntil?: number;
+  retryAfterText?: string;
+  lastChecked?: number;
+  lastError?: string;
+}
+
+const modelStatusMap: Record<string, ModelQuotaState> = {};
+for (const m of VISION_MODELS) {
+  modelStatusMap[m] = {
+    model: m,
+    status: 'available',
+  };
+}
+
+function parseRetryDelayMs(errMessage: string): { ms: number; text: string } {
+  const match = errMessage.match(/Please retry in ([^.\n"]+)/i);
+  if (match && match[1]) {
+    return {
+      ms: 30 * 60 * 1000, // Cache cooldown for 30 minutes or until manual re-check
+      text: match[1].trim(),
+    };
+  }
+  return { ms: 15 * 60 * 1000, text: 'algumas horas' };
+}
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
     hasApiKey: !!process.env.GEMINI_API_KEY,
     timestamp: new Date().toISOString(),
+  });
+});
+
+// Quota status endpoint so user can inspect AI credits/rate-limits in real time
+app.get('/api/quota-status', (req, res) => {
+  const now = Date.now();
+  const models = VISION_MODELS.map((m) => {
+    const st = modelStatusMap[m];
+    if (st.status === 'exhausted' && st.exhaustedUntil && now > st.exhaustedUntil) {
+      st.status = 'available';
+      st.exhaustedUntil = undefined;
+    }
+    return st;
+  });
+
+  const availableCount = models.filter((m) => m.status !== 'exhausted').length;
+  res.json({
+    hasApiKey: !!process.env.GEMINI_API_KEY,
+    availableCount,
+    totalModels: VISION_MODELS.length,
+    models,
+    dashboardUrl: 'https://ai.dev/rate-limit',
+  });
+});
+
+// Active probe to test which models currently have credits/quota available
+app.post('/api/quota-status/check', async (req, res) => {
+  const results: ModelQuotaState[] = [];
+
+  for (const modelName of VISION_MODELS) {
+    try {
+      await ai.models.generateContent({
+        model: modelName,
+        contents: 'OK',
+        config: {
+          maxOutputTokens: 5,
+        },
+      });
+      modelStatusMap[modelName] = {
+        model: modelName,
+        status: 'available',
+        lastChecked: Date.now(),
+      };
+    } catch (err: any) {
+      const msg = err?.message || String(err);
+      const isQuota = err?.status === 429 || msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED');
+      if (isQuota) {
+        const retry = parseRetryDelayMs(msg);
+        modelStatusMap[modelName] = {
+          model: modelName,
+          status: 'exhausted',
+          exhaustedUntil: Date.now() + retry.ms,
+          retryAfterText: retry.text,
+          lastChecked: Date.now(),
+          lastError: 'Limite diário gratuito atingido (20 req/dia neste modelo)',
+        };
+      } else {
+        modelStatusMap[modelName] = {
+          model: modelName,
+          status: 'exhausted',
+          exhaustedUntil: Date.now() + 5 * 60 * 1000,
+          lastChecked: Date.now(),
+          lastError: `Indisponível (${err?.status || 'erro'})`,
+        };
+      }
+    }
+    results.push(modelStatusMap[modelName]);
+  }
+
+  const availableCount = results.filter((m) => m.status === 'available').length;
+  res.json({
+    hasApiKey: !!process.env.GEMINI_API_KEY,
+    availableCount,
+    totalModels: VISION_MODELS.length,
+    models: results,
+    dashboardUrl: 'https://ai.dev/rate-limit',
   });
 });
 
@@ -44,14 +157,18 @@ app.post('/api/extract-label', async (req, res) => {
       return res.status(400).json({ error: 'Nenhuma imagem fornecida' });
     }
 
+    // Detect actual mimeType from data URI prefix if present
+    const mimeMatch = imageBase64.match(/^data:(image\/[a-z0-9-+.]+);base64,/i);
+    const actualMimeType = mimeMatch ? mimeMatch[1] : mimeType || 'image/jpeg';
+
     // Clean base64 prefix if present
-    const cleanBase64 = imageBase64.replace(/^data:image\/[a-z0-9-+.]+;base64,/, '');
+    const cleanBase64 = imageBase64.replace(/^data:image\/[a-z0-9-+.]+;base64,/i, '');
 
     const systemInstruction = `Você é um especialista em logística, conferência de estoque e OCR de alta precisão para embalagens e caixas industriais (Grupo Boticário, O Boticário, Eudora, Siàge, Lily, Floratta, etc.).
 Sua função é analisar fotos de etiquetas de caixas e embalagens (tanto etiquetas impressas de fábrica quanto etiquetas manuscritas) e extrair os dados com máxima fidelidade.
 
 ESTRUTURA DAS ETIQUETAS DE FÁBRICA:
-1. codigo: É o NÚMERO EM MAIOR DESTAQUE / MAIOR TAMANHO DE FONTE (geralmente 4 a 6 dígitos, como "53501", "53504", "87896", "86809", "94489", "90808").
+1. codigo: É o NÚMERO EM MAIOR DESTAQUE / MAIOR TAMANHO DE FONTE (geralmente 4 a 6 dígitos, como "53501", "53504", "87896", "86809", "94489", "90808", "19816", "82689").
    - Fica posicionado logo abaixo dos códigos de barras EAN / DUN.
    - NÃO confunda com o número do código de barras EAN nem DUN. O código do produto é o número grande impresso logo acima da descrição.
 2. descricao: A descrição do produto fica LOGO ABAIXO do código do produto.
@@ -117,12 +234,21 @@ Retorne string vazia ("") somente se algum campo estiver fisicamente borrado ou 
       required: ['etiquetas'],
     };
 
-    // Helper with model fallback for 503 high demand spikes
-    const modelsToTry = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-3.8-flash'];
-    let responseText = '{}';
-    let lastError: any = null;
+    // Prioritize models that are not marked as quota-exhausted
+    const now = Date.now();
+    const availableModels = VISION_MODELS.filter((m) => {
+      const st = modelStatusMap[m];
+      return !st || st.status !== 'exhausted' || (st.exhaustedUntil && now > st.exhaustedUntil);
+    });
+    const exhaustedModels = VISION_MODELS.filter((m) => !availableModels.includes(m));
+    const orderedModelsToTry = [...availableModels, ...exhaustedModels];
 
-    for (const modelName of modelsToTry) {
+    let responseText: string | null = null;
+    let usedModel: string | null = null;
+    let lastError: any = null;
+    let quotaErrorsCount = 0;
+
+    for (const modelName of orderedModelsToTry) {
       try {
         const response = await ai.models.generateContent({
           model: modelName,
@@ -131,7 +257,7 @@ Retorne string vazia ("") somente se algum campo estiver fisicamente borrado ou 
               {
                 inlineData: {
                   data: cleanBase64,
-                  mimeType: mimeType || 'image/jpeg',
+                  mimeType: actualMimeType,
                 },
               },
               {
@@ -141,7 +267,7 @@ Retorne string vazia ("") somente se algum campo estiver fisicamente borrado ou 
           },
           config: {
             systemInstruction,
-            temperature: 0.1, // Low temperature for factual OCR accuracy
+            temperature: 0.1,
             responseMimeType: 'application/json',
             responseSchema,
           },
@@ -149,12 +275,44 @@ Retorne string vazia ("") somente se algum campo estiver fisicamente borrado ou 
 
         if (response && response.text) {
           responseText = response.text;
+          usedModel = modelName;
+          modelStatusMap[modelName] = {
+            model: modelName,
+            status: 'available',
+            lastChecked: Date.now(),
+          };
           break;
         }
       } catch (err: any) {
-        console.warn(`Model ${modelName} failed, trying fallback:`, err.message);
+        const msg = err?.message || String(err);
+        console.warn(`Model ${modelName} failed, trying next fallback:`, msg.slice(0, 200));
         lastError = err;
+
+        const isQuota = err?.status === 429 || msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED');
+        if (isQuota) {
+          quotaErrorsCount++;
+          const retry = parseRetryDelayMs(msg);
+          modelStatusMap[modelName] = {
+            model: modelName,
+            status: 'exhausted',
+            exhaustedUntil: Date.now() + retry.ms,
+            retryAfterText: retry.text,
+            lastChecked: Date.now(),
+            lastError: 'Limite diário gratuito atingido (20 req/dia)',
+          };
+        }
       }
+    }
+
+    if (!responseText) {
+      const isAllQuotaExhausted = quotaErrorsCount > 0;
+      return res.status(isAllQuotaExhausted ? 429 : 500).json({
+        error: isAllQuotaExhausted
+          ? 'Todos os modelos gratuitos de IA atingiram o limite diário (cota 429). Verifique o painel de créditos ou aguarde a renovação.'
+          : 'Não foi possível analisar a imagem no momento.',
+        quotaExhausted: isAllQuotaExhausted,
+        details: lastError?.message || '',
+      });
     }
 
     let parsedData: { etiquetas?: any[] } = {};
@@ -165,15 +323,21 @@ Retorne string vazia ("") somente se algum campo estiver fisicamente borrado ou 
       return res.status(500).json({ error: 'Falha ao interpretar resposta da IA', details: lastError?.message });
     }
 
-    const etiquetas = (parsedData.etiquetas || []).map((item, index) => {
-      const codigo = (item.codigo || '').trim();
-      let descricao = (item.descricao || '').trim();
+    const rawList = Array.isArray(parsedData.etiquetas)
+      ? parsedData.etiquetas
+      : Array.isArray(parsedData)
+      ? parsedData
+      : [];
+
+    const etiquetas = rawList.map((item, index) => {
+      const codigo = (item.codigo || '').toString().trim();
+      let descricao = (item.descricao || '').toString().trim();
       // Remove leading bracket/area code artifacts like '[5 ', 'C9 ', 'H4 ', or 'DESC:'
       descricao = descricao.replace(/^(DESC\s*:\s*|\[\d+\s*|[A-Z]\d+\s+)/i, '').trim();
 
-      const quantidade = (item.quantidade || '').toString().trim().replace(/^(QTD\s*:\s*|QUANT\s*:\s*)/i, '');
+      const quantidade = (item.quantidade ?? '').toString().trim().replace(/^(QTD\s*:\s*|QUANT\s*:\s*)/i, '');
 
-      let validade = (item.validade || '').trim().replace(/^(VAL\s*:\s*)/i, '');
+      let validade = (item.validade || '').toString().trim().replace(/^(VAL\s*:\s*)/i, '');
       // Normalize DD-MM-YYYY, DD/MM/YYYY, or DD.MM.YYYY into MM/YYYY format
       const dmyMatch = validade.match(/^(\d{1,2})[-/. ](\d{2})[-/. ](\d{4})$/);
       if (dmyMatch) {
@@ -201,6 +365,7 @@ Retorne string vazia ("") somente se algum campo estiver fisicamente borrado ou 
 
     return res.json({
       success: true,
+      usedModel,
       totalDetected: etiquetas.length,
       etiquetas,
     });
@@ -234,7 +399,7 @@ async function startServer() {
   }
 
   app.listen(port, '0.0.0.0', () => {
-    console.log(`EtiquetaFacil server running on http://0.0.0.0:${port}`);
+    console.log(`Server running on http://0.0.0.0:${port}`);
   });
 }
 

@@ -1,6 +1,7 @@
 import React from 'react';
-import { AlertCircle, Edit3, Trash2, Copy, FileText, CheckCircle2 } from 'lucide-react';
+import { AlertCircle, Edit3, Trash2, Copy, CheckCircle2 } from 'lucide-react';
 import { LabelItem } from '../types/label';
+import { ExcelLabelBox } from './ExcelLabelBox';
 
 interface LabelCardProps {
   label: LabelItem;
@@ -130,51 +131,16 @@ export const LabelCard: React.FC<LabelCardProps> = ({
         </div>
       )}
 
-      {/* Exact Visual Label Representation (Padrão Consolas da Foto) */}
-      <div className="p-3">
-        <div
-          className="w-full bg-[#e5e7eb] text-black border-2 border-black rounded-xs p-3 font-consolas select-none shadow-sm relative overflow-hidden"
-          style={{ fontFamily: "Consolas, 'Courier New', monospace" }}
-        >
-          {/* Top: Massive bold product code */}
-          <div className="text-center font-black tracking-tight leading-none py-1 text-3xl sm:text-4xl text-black">
-            {label.codigo ? (
-              label.codigo
-            ) : (
-              <span className="text-red-600 animate-pulse text-lg">[CÓDIGO FALTANTE]</span>
-            )}
-          </div>
-
-          {/* Middle: DESC */}
-          <div className="mt-2 text-xs sm:text-sm font-bold truncate text-black">
-            DESC:{' '}
-            {label.descricao ? (
-              label.descricao.toUpperCase()
-            ) : (
-              <span className="text-red-600 font-normal italic">[Descrição não informada]</span>
-            )}
-          </div>
-
-          {/* Bottom: VAL and QTD */}
-          <div className="mt-1 flex items-center justify-between text-xs sm:text-sm font-bold text-black">
-            <span>
-              VAL:{' '}
-              {label.validade ? (
-                label.validade
-              ) : (
-                <span className="text-red-600 font-normal italic">--/----</span>
-              )}
-            </span>
-            <span>
-              QTD:{' '}
-              {label.quantidade ? (
-                label.quantidade
-              ) : (
-                <span className="text-red-600 font-normal italic">--</span>
-              )}
-            </span>
-          </div>
-        </div>
+      {/* Exact Visual Label Representation (Padrão Excel Consolas 120pt / 28pt) */}
+      <div className="p-3 bg-white/95 m-2.5 rounded-sm shadow-inner">
+        <ExcelLabelBox
+          codigo={label.codigo}
+          descricao={label.descricao}
+          validade={label.validade}
+          quantidade={label.quantidade}
+          grayBackground={true}
+          showBorder={false}
+        />
       </div>
     </div>
   );

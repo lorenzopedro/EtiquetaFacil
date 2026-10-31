@@ -13,6 +13,7 @@ import {
 import { LabelItem, PrintSettings } from '../types/label';
 import { generateLabelsPDF } from '../services/pdfGenerator';
 import { exportLabelsToCSV } from '../services/csvExport';
+import { ExcelLabelBox } from '../components/ExcelLabelBox';
 
 interface PdfPageViewProps {
   labels: LabelItem[];
@@ -61,18 +62,18 @@ export const PdfPageView: React.FC<PdfPageViewProps> = ({
   const handleResetSettings = () => {
     onUpdateSettings({
       layoutMode: '3-per-page',
-      showBorder: true,
+      showBorder: false,
       grayBackground: true,
       fontSizeScale: 1.0,
-      marginTop: 9,
-      marginX: 10,
+      marginTop: 6,
+      marginX: 7.5,
       gapY: 5.5,
     });
   };
 
   // Convert mm settings to percentages for responsive A4 preview container
-  const marginTopMm = settings.marginTop ?? 9;
-  const marginXMm = settings.marginX ?? 10;
+  const marginTopMm = settings.marginTop ?? 6;
+  const marginXMm = settings.marginX ?? 7.5;
   const gapYMm = settings.gapY ?? 5.5;
 
   const marginTopPct = (marginTopMm / 210) * 100;
@@ -81,20 +82,6 @@ export const PdfPageView: React.FC<PdfPageViewProps> = ({
 
   return (
     <div className="flex flex-col gap-6 max-w-4xl mx-auto w-full animate-fade-in pb-8">
-      {/* Banner */}
-      <div className="rounded-3xl bg-radial from-[#00325f] to-[#011e38] border-2 border-[#00325f] p-5 sm:p-6 shadow-xl space-y-2 text-center sm:text-left">
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#011e38] text-[#38bdf8] text-xs font-mono font-semibold border border-[#38bdf8]/30">
-          <Printer className="w-3.5 h-3.5" />
-          Pré-visualização Física A4 Paisagem
-        </span>
-        <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-          Ajuste de Margens & Impressão A4
-        </h2>
-        <p className="text-xs sm:text-sm text-[#e6f0ff]/80">
-          Visualize a folha física A4 Paisagem com fonte <strong>Consolas</strong>. Ajuste as margens superiores, laterais e espaçamento em tempo real antes de baixar o PDF.
-        </p>
-      </div>
-
       {/* Metrics Summary */}
       <div className="grid grid-cols-3 gap-3">
         <div className="rounded-2xl bg-[#002242] border border-[#00325f] p-3.5 text-center shadow-md">
@@ -112,7 +99,7 @@ export const PdfPageView: React.FC<PdfPageViewProps> = ({
       </div>
 
       {/* Interactive A4 Physical Page Preview */}
-      <div className="rounded-3xl bg-[#002242]/80 border-2 border-[#00325f] p-4 sm:p-6 shadow-2xl flex flex-col items-center space-y-4">
+      <div className="rounded-3xl bg-[#002242]/80 border-2 border-[#00325f] p-3 sm:p-6 shadow-2xl flex flex-col items-center space-y-4">
         {/* Preview Header & Controls */}
         <div className="w-full flex items-center justify-between text-xs font-semibold text-white px-1">
           <div className="flex items-center gap-2">
@@ -147,7 +134,7 @@ export const PdfPageView: React.FC<PdfPageViewProps> = ({
         </div>
 
         {/* Physical A4 Sheet Aspect Ratio Preview */}
-        <div className="w-full relative bg-gray-400 p-2 sm:p-4 rounded-2xl border-4 border-gray-600 shadow-[0_15px_30px_rgba(0,0,0,0.6)] overflow-hidden">
+        <div className="w-full relative bg-gray-400 p-2 sm:p-3.5 rounded-2xl border-4 border-gray-600 shadow-[0_15px_30px_rgba(0,0,0,0.6)] overflow-hidden">
           {/* Paper Sheet Container (297 x 210 aspect ratio) */}
           <div
             className="w-full relative bg-white rounded-xs shadow-xl overflow-hidden transition-all duration-200"
@@ -170,86 +157,77 @@ export const PdfPageView: React.FC<PdfPageViewProps> = ({
                   paddingBottom: `${marginTopPct}%`,
                   paddingLeft: `${marginXPct}%`,
                   paddingRight: `${marginXPct}%`,
-                  rowGap: `${gapYPct}%`,
                 }}
               >
                 {/* Render Grid based on layoutMode */}
                 {settings.layoutMode === '3-per-page' && (
                   <div
-                    className="w-full h-full flex flex-col"
+                    className="w-full h-full grid grid-rows-3"
                     style={{ rowGap: `${gapYPct}%` }}
                   >
-                    {pageLabels.map((item, idx) => (
-                      <div
-                        key={`${item.id}-${idx}`}
-                        className={`flex-1 rounded-xs flex flex-col justify-between p-2 font-consolas transition-all ${
-                          settings.grayBackground ? 'bg-[#e9ebee]' : 'bg-white'
-                        } ${settings.showBorder ? 'border-2 border-black' : 'border border-dashed border-gray-300'}`}
-                        style={{ fontFamily: "Consolas, 'Courier New', monospace" }}
-                      >
-                        {/* Large Code */}
-                        <div className="text-center font-black tracking-tight text-black text-[clamp(14px,3.2vw,32px)] leading-none my-auto">
-                          {item.codigo || '------'}
+                    {[0, 1, 2].map((slotIdx) => {
+                      const item = pageLabels[slotIdx];
+                      if (!item) {
+                        return <div key={`empty-${slotIdx}`} className="w-full h-full" />;
+                      }
+                      return (
+                        <div key={`${item.id}-${slotIdx}`} className="w-full h-full flex items-center justify-center overflow-hidden">
+                          <ExcelLabelBox
+                            codigo={item.codigo}
+                            descricao={item.descricao}
+                            validade={item.validade}
+                            quantidade={item.quantidade}
+                            grayBackground={settings.grayBackground}
+                            showBorder={settings.showBorder}
+                            fontSizeScale={settings.fontSizeScale}
+                            className="w-full h-full !aspect-auto"
+                          />
                         </div>
-                        {/* Desc */}
-                        <div className="font-bold text-black text-[clamp(8px,1.4vw,14px)] truncate uppercase tracking-tight">
-                          DESC: {item.descricao || '------------------------'}
-                        </div>
-                        {/* Val & Qtd */}
-                        <div className="flex items-center justify-between font-bold text-black text-[clamp(8px,1.4vw,14px)]">
-                          <span>VAL: {item.validade || '--/----'}</span>
-                          <span>QTD: {item.quantidade || '0'}</span>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
 
                 {settings.layoutMode === '6-per-page' && (
                   <div
-                    className="w-full h-full grid grid-cols-2 grid-rows-3 gap-2"
+                    className="w-full h-full grid grid-cols-2 grid-rows-3"
                     style={{ gap: `${gapYPct}%` }}
                   >
-                    {pageLabels.map((item, idx) => (
-                      <div
-                        key={`${item.id}-${idx}`}
-                        className={`rounded-xs flex flex-col justify-between p-1.5 font-consolas ${
-                          settings.grayBackground ? 'bg-[#e9ebee]' : 'bg-white'
-                        } ${settings.showBorder ? 'border-2 border-black' : 'border border-dashed border-gray-300'}`}
-                        style={{ fontFamily: "Consolas, 'Courier New', monospace" }}
-                      >
-                        <div className="text-center font-black tracking-tight text-black text-[clamp(10px,2vw,20px)] leading-none my-auto">
-                          {item.codigo || '------'}
+                    {[0, 1, 2, 3, 4, 5].map((slotIdx) => {
+                      const item = pageLabels[slotIdx];
+                      if (!item) {
+                        return <div key={`empty-6-${slotIdx}`} className="w-full h-full" />;
+                      }
+                      return (
+                        <div key={`${item.id}-${slotIdx}`} className="w-full h-full flex items-center justify-center overflow-hidden">
+                          <ExcelLabelBox
+                            codigo={item.codigo}
+                            descricao={item.descricao}
+                            validade={item.validade}
+                            quantidade={item.quantidade}
+                            grayBackground={settings.grayBackground}
+                            showBorder={settings.showBorder}
+                            fontSizeScale={settings.fontSizeScale}
+                            className="w-full h-full !aspect-auto"
+                          />
                         </div>
-                        <div className="font-bold text-black text-[clamp(6px,1vw,10px)] truncate uppercase">
-                          DESC: {item.descricao || '------------------------'}
-                        </div>
-                        <div className="flex items-center justify-between font-bold text-black text-[clamp(6px,1vw,10px)]">
-                          <span>VAL: {item.validade || '--/----'}</span>
-                          <span>QTD: {item.quantidade || '0'}</span>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
 
                 {settings.layoutMode === '1-per-page' && pageLabels.length > 0 && (
-                  <div
-                    className={`w-full h-full rounded-xs flex flex-col justify-between p-6 font-consolas ${
-                      settings.grayBackground ? 'bg-[#e9ebee]' : 'bg-white'
-                    } ${settings.showBorder ? 'border-4 border-black' : 'border border-dashed border-gray-300'}`}
-                    style={{ fontFamily: "Consolas, 'Courier New', monospace" }}
-                  >
-                    <div className="text-center font-black tracking-tight text-black text-[clamp(28px,7vw,64px)] leading-none my-auto">
-                      {pageLabels[0].codigo || '------'}
-                    </div>
-                    <div className="font-bold text-black text-[clamp(12px,2.2vw,24px)] truncate uppercase">
-                      DESC: {pageLabels[0].descricao || '------------------------'}
-                    </div>
-                    <div className="flex items-center justify-between font-bold text-black text-[clamp(12px,2.2vw,24px)]">
-                      <span>VAL: {pageLabels[0].validade || '--/----'}</span>
-                      <span>QTD: {pageLabels[0].quantidade || '0'}</span>
-                    </div>
+                  <div className="w-full h-full flex items-center justify-center overflow-hidden">
+                    <ExcelLabelBox
+                      codigo={pageLabels[0].codigo}
+                      descricao={pageLabels[0].descricao}
+                      validade={pageLabels[0].validade}
+                      quantidade={pageLabels[0].quantidade}
+                      grayBackground={settings.grayBackground}
+                      showBorder={settings.showBorder}
+                      fontSizeScale={settings.fontSizeScale}
+                      className="w-full h-full !aspect-auto"
+                    />
                   </div>
                 )}
               </div>
@@ -290,7 +268,7 @@ export const PdfPageView: React.FC<PdfPageViewProps> = ({
               }`}
             >
               <span>Padrão (3 / folha)</span>
-              <span className="text-[10px] opacity-75 font-normal">Ideal para caixas</span>
+              <span className="text-[10px] opacity-75 font-normal">Modelo Excel (120pt)</span>
             </button>
             <button
               onClick={() => onUpdateSettings({ ...settings, layoutMode: '6-per-page' })}
@@ -381,7 +359,7 @@ export const PdfPageView: React.FC<PdfPageViewProps> = ({
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pt-2 border-t border-[#00325f]">
           <div className="flex items-center gap-3 text-xs">
             <span className="font-semibold text-white">Escala da Fonte:</span>
-            {[0.8, 1.0, 1.2].map((scale) => (
+            {[0.8, 1.0, 1.15].map((scale) => (
               <button
                 key={scale}
                 onClick={() => onUpdateSettings({ ...settings, fontSizeScale: scale })}

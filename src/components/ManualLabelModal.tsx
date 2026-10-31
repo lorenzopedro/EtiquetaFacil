@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { PlusCircle, Edit3, X, Check } from 'lucide-react';
 import { LabelItem } from '../types/label';
+import { ExcelLabelBox } from './ExcelLabelBox';
 
 interface ManualLabelModalProps {
   isOpen: boolean;
@@ -101,7 +102,7 @@ export const ManualLabelModal: React.FC<ManualLabelModalProps> = ({
               value={codigo}
               onChange={(e) => setCodigo(e.target.value)}
               placeholder="Ex: 90808"
-              className="w-full rounded-xl bg-[#002242] border border-[#00325f] px-3.5 py-2.5 text-sm font-mono text-white focus:outline-hidden focus:border-[#38bdf8]"
+              className="w-full rounded-xl bg-[#002242] border border-[#00325f] px-3.5 py-2.5 text-sm text-white focus:outline-hidden focus:border-[#38bdf8]"
               required
             />
           </div>
@@ -115,7 +116,7 @@ export const ManualLabelModal: React.FC<ManualLabelModalProps> = ({
               value={descricao}
               onChange={(e) => setDescricao(e.target.value)}
               placeholder="Ex: ESTJ MALBEC CLUB REG/26"
-              className="w-full rounded-xl bg-[#002242] border border-[#00325f] px-3.5 py-2.5 text-sm font-mono text-white focus:outline-hidden focus:border-[#38bdf8]"
+              className="w-full rounded-xl bg-[#002242] border border-[#00325f] px-3.5 py-2.5 text-sm text-white focus:outline-hidden focus:border-[#38bdf8]"
               required
             />
           </div>
@@ -130,7 +131,7 @@ export const ManualLabelModal: React.FC<ManualLabelModalProps> = ({
                 value={quantidade}
                 onChange={(e) => setQuantidade(e.target.value)}
                 placeholder="Ex: 7"
-                className="w-full rounded-xl bg-[#002242] border border-[#00325f] px-3.5 py-2.5 text-sm font-mono text-white focus:outline-hidden focus:border-[#38bdf8]"
+                className="w-full rounded-xl bg-[#002242] border border-[#00325f] px-3.5 py-2.5 text-sm text-white focus:outline-hidden focus:border-[#38bdf8]"
                 required
               />
             </div>
@@ -144,7 +145,7 @@ export const ManualLabelModal: React.FC<ManualLabelModalProps> = ({
                 value={validade}
                 onChange={(e) => setValidade(e.target.value)}
                 placeholder="MM/AAAA"
-                className="w-full rounded-xl bg-[#002242] border border-[#00325f] px-3.5 py-2.5 text-sm font-mono text-white focus:outline-hidden focus:border-[#38bdf8]"
+                className="w-full rounded-xl bg-[#002242] border border-[#00325f] px-3.5 py-2.5 text-sm text-white focus:outline-hidden focus:border-[#38bdf8]"
                 required
               />
             </div>
@@ -180,25 +181,20 @@ export const ManualLabelModal: React.FC<ManualLabelModalProps> = ({
             </div>
           </div>
 
-          {/* Consolas Preview */}
+          {/* Consolas Preview (Excel 120pt / 28pt) */}
           <div className="pt-2">
-            <span className="text-xs font-semibold text-[#e6f0ff]/80 block mb-1">
-              Padrão da Etiqueta:
+            <span className="text-xs font-semibold text-[#e6f0ff]/80 block mb-1.5">
+              Padrão da Etiqueta (Consolas 120pt / 28pt):
             </span>
-            <div
-              className="bg-[#e5e7eb] text-black border-2 border-black rounded-xs p-2.5 font-consolas select-none"
-              style={{ fontFamily: "Consolas, 'Courier New', monospace" }}
-            >
-              <div className="text-center font-black text-2xl text-black">
-                {codigo || '90808'}
-              </div>
-              <div className="text-xs font-bold truncate text-black mt-1">
-                DESC: {(descricao || 'ESTJ MALBEC CLUB REG/26').toUpperCase()}
-              </div>
-              <div className="flex items-center justify-between text-xs font-bold text-black mt-0.5">
-                <span>VAL: {validade || '06/2029'}</span>
-                <span>QTD: {quantidade || '7'}</span>
-              </div>
+            <div className="bg-white p-2 rounded-xs shadow-inner">
+              <ExcelLabelBox
+                codigo={codigo || '90808'}
+                descricao={descricao || 'ESTJ MALBEC CLUB REG/26'}
+                validade={validade || '06/2029'}
+                quantidade={quantidade || '7'}
+                grayBackground={true}
+                showBorder={false}
+              />
             </div>
           </div>
 

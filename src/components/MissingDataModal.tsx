@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { AlertTriangle, Check, X, Eye, Sparkles, Trash2 } from 'lucide-react';
+import { AlertTriangle, Check, X, Eye, Trash2 } from 'lucide-react';
 import { LabelItem, MissingFieldType } from '../types/label';
+import { ExcelLabelBox } from './ExcelLabelBox';
 
 interface MissingDataModalProps {
   label: LabelItem | null;
@@ -294,22 +295,17 @@ export const MissingDataModal: React.FC<MissingDataModalProps> = ({
           {/* Live Consolas Preview inside modal */}
           <div className="pt-2">
             <span className="text-xs font-semibold text-[#e6f0ff]/80 block mb-1.5">
-              Prévia da Etiqueta no Padrão Consolas:
+              Prévia da Etiqueta (Consolas 120pt / 28pt):
             </span>
-            <div
-              className="bg-[#e5e7eb] text-black border-2 border-black rounded-xs p-3 font-consolas select-none"
-              style={{ fontFamily: "Consolas, 'Courier New', monospace" }}
-            >
-              <div className="text-center font-black text-2xl tracking-tight text-black">
-                {codigo || '------'}
-              </div>
-              <div className="mt-1 text-xs font-bold truncate text-black">
-                DESC: {(descricao || '------------------------').toUpperCase()}
-              </div>
-              <div className="mt-0.5 flex items-center justify-between text-xs font-bold text-black">
-                <span>VAL: {validade || '--/----'}</span>
-                <span>QTD: {quantidade || '--'}</span>
-              </div>
+            <div className="bg-white p-2 rounded-xs shadow-inner">
+              <ExcelLabelBox
+                codigo={codigo}
+                descricao={descricao}
+                validade={validade}
+                quantidade={quantidade}
+                grayBackground={true}
+                showBorder={false}
+              />
             </div>
           </div>
 

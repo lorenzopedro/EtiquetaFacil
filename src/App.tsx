@@ -51,14 +51,14 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'pending' | 'complete'>('all');
 
-  // PDF settings
+  // PDF settings matching Excel reference (no black border, gray background, 120pt/28pt Consolas)
   const [printSettings, setPrintSettings] = useState<PrintSettings>({
     layoutMode: '3-per-page',
-    showBorder: true,
+    showBorder: false,
     grayBackground: true,
     fontSizeScale: 1.0,
-    marginTop: 9,
-    marginX: 10,
+    marginTop: 6,
+    marginX: 7.5,
     gapY: 5.5,
   });
 
@@ -83,19 +83,54 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
+  // Helper to normalize & compress large smartphone photos to clean JPEG max 1600px
+  const normalizeImageToJpeg = (rawDataUrl: string): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = 1600;
+        let width = img.width;
+        let height = img.height;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', 0.88));
+        } else {
+          resolve(rawDataUrl);
+        }
+      };
+      img.onerror = () => resolve(rawDataUrl);
+      img.src = rawDataUrl;
+    });
+  };
+
   // Process image for label extraction via Server API and save to Firestore
-  const processImageForLabels = async (imageBase64: string, filename = 'foto_etiqueta.jpg') => {
+  const processImageForLabels = async (rawImageBase64: string, filename = 'foto_etiqueta.jpg') => {
     setIsAnalyzing(true);
-    setCurrentImagePreview(imageBase64);
-    setAnalyzingStatus('Analisando caracteres (impressos ou manuscritos)...');
+    setCurrentImagePreview(rawImageBase64);
+    setAnalyzingStatus('Otimizando imagem e analisando etiqueta com IA...');
 
     try {
+      const imageBase64 = await normalizeImageToJpeg(rawImageBase64);
+
       const response = await fetch('/api/extract-label', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           imageBase64,
-          mimeType: imageBase64.startsWith('data:image/png') ? 'image/png' : 'image/jpeg',
+          mimeType: 'image/jpeg',
         }),
       });
 
@@ -133,7 +168,9 @@ export default function App() {
       for (const lbl of detectedLabels) {
         await firebaseService.addOrUpdateLabel(lbl);
       }
-      showToast(`${detectedLabels.length} etiqueta(s) salva(s) no Firestore!`);
+      showToast(
+        `${detectedLabels.length} etiqueta(s) lida(s) (${data.usedModel || 'IA'}) e salva(s)!`
+      );
 
       // Check for missing data
       const missingList = detectedLabels.filter(
@@ -148,6 +185,7 @@ export default function App() {
       }
     } catch (err: any) {
       console.error('Failed to extract labels:', err);
+      showToast(err?.message || 'Limite da IA atingido. Preencha manualmente.');
       const fallbackLabel: LabelItem = {
         id: `label-offline-${Date.now()}`,
         codigo: '',
@@ -159,7 +197,7 @@ export default function App() {
         missingFields: ['codigo', 'descricao', 'quantidade', 'validade'],
         needsManualReview: true,
         createdAt: Date.now(),
-        imagePreviewUrl: imageBase64,
+        imagePreviewUrl: rawImageBase64,
         copias: 1,
       };
 
@@ -187,6 +225,7 @@ export default function App() {
       reader.readAsDataURL(file);
     });
 
+    e.target.value = '';
   };
 
   const handleSaveMissingData = async (updatedLabel: LabelItem) => {
@@ -431,7 +470,7 @@ export default function App() {
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder="Buscar por código ou descrição..."
-                      className="w-full rounded-xl bg-[#011e38] border border-[#00325f] pl-9 pr-3 py-2 text-xs font-mono text-white placeholder-[#e6f0ff]/40 focus:outline-hidden focus:border-[#38bdf8]"
+                      className="w-full rounded-xl bg-[#011e38] border border-[#00325f] pl-9 pr-3 py-2 text-xs text-white placeholder-[#e6f0ff]/40 focus:outline-hidden focus:border-[#38bdf8]"
                     />
                   </div>
                 </div>
